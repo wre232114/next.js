@@ -10,13 +10,29 @@ import { promisify } from 'util'
 import { parse } from '../../swc'
 import { buildExports } from './utils'
 
+function getExportsExpressionNode(node: any) {
+  if (
+    node.type === 'AssignmentExpression' &&
+    node.left.type === 'MemberExpression'
+  ) {
+    const { object, property } = node.left
+    if (object && object.type === 'Identifier' && object.value === 'exports') {
+      if (property.type === 'Identifier') {
+        return property
+      }
+    }
+  }
+
+  return null
+}
+
 function addExportNames(names: string[], node: any) {
   if (!node) return
   switch (node.type) {
     case 'Identifier':
       names.push(node.value)
       return
-    case 'ObjectPattern':
+    case 'ObjectExpression':
       for (let i = 0; i < node.properties.length; i++)
         addExportNames(names, node.properties[i])
       return
@@ -26,13 +42,13 @@ function addExportNames(names: string[], node: any) {
         if (element) addExportNames(names, element)
       }
       return
-    case 'Property':
+    case 'KeyValueProperty':
       addExportNames(names, node.value)
       return
-    case 'AssignmentPattern':
+    case 'AssignmentExpression':
       addExportNames(names, node.left)
       return
-    case 'RestElement':
+    case 'SpreadElement':
       addExportNames(names, node.argument)
       return
     case 'ParenthesizedExpression':
@@ -53,18 +69,20 @@ async function collectExports(
     resolve: (request: string) => Promise<string>
     loadModule: (request: string) => Promise<string>
   }
-) {
+): Promise<{ names: string[]; isEsm: boolean }> {
   const names: string[] = []
+
+  const { body, type } = await parse(transformedSource, {
+    filename: resourcePath,
+    isModule: 'unknown',
+  })
+
+  const isEsm = type === 'Module'
 
   // Next.js built-in client components
   if (/[\\/]next[\\/](link|image)\.js$/.test(resourcePath)) {
     names.push('default')
   }
-
-  const { body } = await parse(transformedSource, {
-    filename: resourcePath,
-    isModule: 'unknown',
-  })
 
   for (let i = 0; i < body.length; i++) {
     const node = body[i]
@@ -97,21 +115,6 @@ async function collectExports(
           addExportNames(names, node.declaration.identifier)
         }
         break
-      case 'ExpressionStatement': {
-        const {
-          expression: { left },
-        } = node
-        // exports.xxx = xxx
-        if (
-          left.object &&
-          left.type === 'MemberExpression' &&
-          left.object.type === 'Identifier' &&
-          left.object.value === 'exports'
-        ) {
-          addExportNames(names, left.property)
-        }
-        break
-      }
       case 'ExportAllDeclaration':
         if (node.exported) {
           addExportNames(names, node.exported)
@@ -123,20 +126,24 @@ async function collectExports(
           reexportedFromResourcePath
         )
 
-        names.push(
-          ...(await collectExports(
-            reexportedFromResourcePath,
-            reexportedFromResourceSource,
-            { resolve, loadModule }
-          ))
+        const { names: reexportedNames } = await collectExports(
+          reexportedFromResourcePath,
+          reexportedFromResourceSource,
+          { resolve, loadModule }
         )
-        continue
+        names.push(...reexportedNames)
+        break
+      case 'ExpressionStatement':
+        // exports.xxx = xxx
+        const exportNode = getExportsExpressionNode(node.expression)
+        if (exportNode) addExportNames(names, exportNode)
+        break
       default:
         break
     }
   }
 
-  return names
+  return { names, isEsm }
 }
 
 export default async function transformSource(
@@ -150,10 +157,14 @@ export default async function transformSource(
     throw new Error('Expected source to have been transformed to a string.')
   }
 
-  const names = await collectExports(resourcePath, transformedSource, {
-    resolve: (...args) => promisify(resolve)(context, ...args),
-    loadModule: promisify(loadModule),
-  })
+  const { names, isEsm } = await collectExports(
+    resourcePath,
+    transformedSource,
+    {
+      resolve: (...args) => promisify(resolve)(context, ...args),
+      loadModule: promisify(loadModule),
+    }
+  )
 
   const moduleRefDef =
     "const MODULE_REFERENCE = Symbol.for('react.module.reference');\n"
@@ -170,6 +181,6 @@ export default async function transformSource(
   }, {})
 
   // still generate module references in ESM
-  const output = moduleRefDef + buildExports(clientRefsExports, true)
+  const output = moduleRefDef + buildExports(clientRefsExports, isEsm)
   return output
 }

@@ -478,6 +478,11 @@ export default async function getBaseWebpackConfig(
     `\\.server\\.(${rawPageExtensions.join('|')})$`
   )
 
+  // Always include js/cjs/mjs for compiles files from node_modules
+  const clientComponentsRegex = new RegExp(
+    `\\.client\\.(tsx|ts|js|cjs|mjs|jsx)$`
+  )
+
   const babelIncludeRegexes: RegExp[] = [
     /next[\\/]dist[\\/]shared[\\/]lib/,
     /next[\\/]dist[\\/]client/,
@@ -1214,6 +1219,13 @@ export default async function getBaseWebpackConfig(
                     options: {
                       extensions: rawPageExtensions,
                     },
+                  },
+                },
+                {
+                  test: clientComponentsRegex,
+                  include: /node_modules/,
+                  use: {
+                    loader: 'next-flight-client-loader',
                   },
                 },
               ]

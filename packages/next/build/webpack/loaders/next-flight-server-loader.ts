@@ -1,5 +1,9 @@
 import { parse } from '../../swc'
-import { buildExports } from './utils'
+import {
+  buildExports,
+  getRequireSourceNode,
+  isRequireExpression,
+} from './utils'
 
 const imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'avif']
 
@@ -24,9 +28,9 @@ export const createServerComponentFilter = (extensions: string[]) => {
   return (importSource: string) => regex.test(importSource)
 }
 
-function createFlightServerRequest(request: string, extensions: string[]) {
+function createFlightServerRequest(request: string, extensions?: string[]) {
   return `next-flight-server-loader?${JSON.stringify({
-    extensions,
+    extensions: ['tsx', 'ts', 'js', 'cjs', 'mjs', 'jsx'],
   })}!${request}`
 }
 
@@ -76,7 +80,7 @@ async function parseModuleInfo({
       case 'ImportDeclaration':
         const importSource = node.source.value
         const resolvedPath = await resolver(importSource)
-        const isNodeModuleImport = resolvedPath.includes('/node_modules/')
+        // const isNodeModuleImport = resolvedPath.includes('/node_modules/')
 
         // matching node_module package but excluding react cores since react is required to be shared
         const isReactImports = [
@@ -106,14 +110,15 @@ async function parseModuleInfo({
             // A shared component. It should be handled as a server component.
             const serverImportSource = isReactImports
               ? importSource
-              : createFlightServerRequest(importSource, extensions)
+              : createFlightServerRequest(importSource)
+
             transformedSource += importDeclarations
             transformedSource += JSON.stringify(serverImportSource)
 
             // TODO: support handling RSC components from node_modules
-            if (!isNodeModuleImport) {
-              imports.push(importSource)
-            }
+            // if (!isNodeModuleImport) {
+            // }
+            imports.push(importSource)
           }
         } else {
           // For the client compilation, we skip all modules imports but
@@ -121,9 +126,10 @@ async function parseModuleInfo({
           // have to be imported from either server or client components.
           if (
             isServerComponent(importSource) ||
-            hasFlightLoader(importSource, 'server') ||
+            hasFlightLoader(importSource, 'server')
+            //  ||
             // TODO: support handling RSC components from node_modules
-            isNodeModuleImport
+            // isNodeModuleImport
           ) {
             continue
           }
@@ -158,6 +164,35 @@ async function parseModuleInfo({
           }
         }
         break
+      case 'VariableDeclaration':
+        // console.log('VariableDeclarator', node)
+        // const xxx = require('...')
+        const { declarations } = node
+        for (const decl of declarations) {
+          console.log('decl:isRequireExpression', decl.init)
+          if (decl.init && isRequireExpression(decl.init)) {
+            const requireSource = getRequireSourceNode(decl.init)
+            imports.push(requireSource)
+          }
+        }
+        break
+      case 'ExpressionStatement':
+        // console.log('ExpressionStatement', node)
+        const { expression } = node
+        if (expression.type === 'AssignmentExpression') {
+          // console.log('ass:isRequireExpression', expression.right)
+          if (isRequireExpression(expression.right)) {
+            const requireSource = getRequireSourceNode(expression.right)
+            imports.push(requireSource)
+          }
+        } else if (expression.type === 'CallExpression') {
+          // console.log('call:isRequireExpression', expression)
+          if (isRequireExpression(expression)) {
+            const requireSource = getRequireSourceNode(expression)
+            imports.push(requireSource)
+          }
+        }
+        break
       default:
         break
     }
@@ -174,7 +209,9 @@ export default async function transformSource(
   this: any,
   source: string
 ): Promise<string> {
-  const { client: isClientCompilation, extensions } = this.getOptions()
+  const opts = this.getOptions()
+  const isClientCompilation = opts.client
+  const extensions = opts.extensions
   const { resourcePath, resolve: resolveFn, context } = this
 
   const resolver = (req: string): Promise<string> => {
@@ -204,6 +241,10 @@ export default async function transformSource(
       return source
     }
   }
+
+  // if (resourcePath.includes('/node_modules/')) {
+  //   return source
+  // }
 
   const {
     source: transformedSource,
@@ -268,5 +309,6 @@ export default async function transformSource(
   }
 
   const output = transformedSource + '\n' + buildExports(rscExports, isEsm)
+  // console.log(resourcePath, isClientCompilation ? 'client' : 'server', ':', output)
   return output
 }
