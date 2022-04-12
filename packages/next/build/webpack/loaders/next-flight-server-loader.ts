@@ -28,9 +28,10 @@ export const createServerComponentFilter = (extensions: string[]) => {
   return (importSource: string) => regex.test(importSource)
 }
 
-function createFlightServerRequest(request: string, extensions?: string[]) {
+function createFlightServerRequest(request: string, client: boolean) {
   return `next-flight-server-loader?${JSON.stringify({
     extensions: ['tsx', 'ts', 'js', 'cjs', 'mjs', 'jsx'],
+    client,
   })}!${request}`
 }
 
@@ -110,7 +111,7 @@ async function parseModuleInfo({
             // A shared component. It should be handled as a server component.
             const serverImportSource = isReactImports
               ? importSource
-              : createFlightServerRequest(importSource)
+              : createFlightServerRequest(importSource, isClientCompilation)
 
             transformedSource += importDeclarations
             transformedSource += JSON.stringify(serverImportSource)
@@ -169,12 +170,12 @@ async function parseModuleInfo({
         // const xxx = require('...')
         const { declarations } = node
         for (const decl of declarations) {
-          console.log('decl:isRequireExpression', decl.init)
           if (decl.init && isRequireExpression(decl.init)) {
             const requireSource = getRequireSourceNode(decl.init)
             imports.push(requireSource)
           }
         }
+        lastIndex = node.source.span.end
         break
       case 'ExpressionStatement':
         // console.log('ExpressionStatement', node)
@@ -192,6 +193,7 @@ async function parseModuleInfo({
             imports.push(requireSource)
           }
         }
+        lastIndex = node.source.span.end
         break
       default:
         break
@@ -274,6 +276,7 @@ export default async function transformSource(
    *   export const __next_rsc__ = { __webpack_require__, _: () => { ... }, server: false }
    */
 
+  console.log(resourcePath, isClientCompilation, imports)
   const rscExports: any = {
     __next_rsc__: `{
       __webpack_require__,
