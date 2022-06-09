@@ -19,9 +19,8 @@ use swc_ecmascript::utils::ExprFactory;
 use swc_ecmascript::{
     ast::{
         Callee, Expr, ExprOrSpread, Id, Ident, ImportDecl, ImportSpecifier, JSXElement,
-        KeyValueProp, MemberProp, ObjectLit, Pat, Prop, PropName, PropOrSpread, Tpl, VarDeclarator,
+        KeyValueProp, MemberProp, ObjectLit, Pat, Prop, PropName, PropOrSpread, Tpl, VarDeclarator, SourceMapperExt
     },
-    codegen::util::SourceMapperExt,
     visit::{Fold, FoldWith},
 };
 use swc_trace_macro::swc_trace;

@@ -21,7 +21,7 @@ use utils::*;
 mod transform_css;
 mod utils;
 
-pub fn styled_jsx(cm: Arc<SourceMap>, file_name: FileName, path: Option<String>)
+pub fn styled_jsx(cm: Arc<SourceMap>, file_name: FileName, path: Option<String>) -> impl Fold {
     let file_name = match file_name {
         FileName::Real(real_file_name) => real_file_name
             .to_str()

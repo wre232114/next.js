@@ -3,7 +3,7 @@ authors = ["강동윤 <kdy1997.dev@gmail.com>"]
 description = "AST transforms for styled-jsx"
 edition = "2018"
 license = "Apache-2.0"
-name = "styled_jsx"
+name = "poly_styled_jsx"
 repository = "https://github.com/vercel/next.js.git"
 version = "0.6.0"
 
@@ -18,5 +18,5 @@ swc_ecmascript = { version = "0.161.0", features = ["parser", "minifier", "utils
 tracing = "0.1.32"
 
 [dev-dependencies]
-swc_ecma_transforms_testing = "0.87.0"
+swc_ecma_transforms_testing = "0.89.0"
 testing = "0.20.0"
