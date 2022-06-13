@@ -6,7 +6,7 @@ include = ["Cargo.toml", "src/**/*.rs"]
 license = "Apache-2.0"
 name = "poly_styled_components"
 repository = "https://github.com/vercel/next.js.git"
-version = "0.31.0"
+version = "0.31.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,11 +17,11 @@ regex = {version = "1.5.4", features = ["std", "perf"], default-features = false
 serde = {version = "1.0.130", features = ["derive"]}
 swc_atoms = "0.2.11"
 swc_common = { version = "0.18.7", features = ["concurrent"] }
-swc_ecmascript = { version = "0.161.0", features = ["utils", "visit"] }
+swc_ecmascript = { version = "0.163.0", features = ["utils", "visit"] }
 tracing = "0.1.32"
 
 [dev-dependencies]
 serde_json = "1"
-swc_ecma_transforms_testing = "0.89.0"
-swc_ecmascript = { version = "0.161.0", features = ["parser", "transforms"] }
+swc_ecma_transforms_testing = "0.91.0"
+swc_ecmascript = { version = "0.163.0", features = ["parser", "transforms"] }
 testing = "0.20.0"
